@@ -3,11 +3,7 @@ import {
   Search,
   RefreshCw,
   ArrowUpDown,
-  Copy,
-  Check,
   Clock,
-  FileText,
-  X,
   Swords,
   Shield,
   Trophy,
@@ -16,29 +12,12 @@ import type { CFNAccountData } from './types/sf6';
 import { RankEmblem } from './components/RankEmblem';
 import { RankChart } from './components/RankChart';
 import { CharacterIcon } from './components/CharacterIcon';
-import { PWAInstallButton } from './components/PWAInstallButton';
 
 type MatchupSort = 'matches_desc' | 'winrate_desc' | 'name_asc';
 
-const PROMPT_SPEC_TEXT = `Создай минималистичное веб-приложение для отслеживания статистики аккаунта Street Fighter 6 по CFN ID: 2438096652 (игрок Kapubara).
-
-1. Данные профиля:
-- Игрок: Kapubara (CFN ID: 2438096652, Steam, Russia).
-- Аватар профиля: иконка персонажа с наивысшим рангом на аккаунте (Alex · 15,350 LP, Platinum 2).
-- Персонажи: на аккаунте отображаются только персонажи, на которых были сыграны игры (Ed 80 матчей, Sagat 45 матчей, Alex 27 матчей, Jamie, Cammy, Terry, Akuma, M. Bison, Luke, Zangief, Dee Jay, A.K.I., Blanka, Guile).
-- Автоматическая синхронизация: данные напрямую подтягиваются из базы CFN без необходимости ручного ввода.
-- Время в игре: статистика игрового времени и распределение по режимам (Fighting Ground, Battle Hub, World Tour).
-
-2. Требования к интерфейсу:
-- Чистый, выразительный интерфейс с крупными, удобными для чтения на ПК шрифтами и иконками.
-- График ранга (LP/MR) по времени с интерактивным тултипом.
-- Список матчапов против других персонажей строго в формате:
-  Иконка персонажа + Имя персонажа + Сыграно игр + Выиграно игр + Процент побед над ним.
-- Журнал недавних боев с отображением Replay ID.`;
+const USER_CFN_ID = '2438096652';
 
 export default function App() {
-  const [cfnInput, setCfnInput] = useState('2438096652');
-  const [activeCfnId, setActiveCfnId] = useState('2438096652');
   const [account, setAccount] = useState<CFNAccountData | null>(null);
   const [selectedCharId, setSelectedCharId] = useState<string>('ed');
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -50,13 +29,8 @@ export default function App() {
   const [matchupSearch, setMatchupSearch] = useState('');
   const [matchupSort, setMatchupSort] = useState<MatchupSort>('matches_desc');
 
-  // Modal state
-  const [isPromptOpen, setIsPromptOpen] = useState(false);
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
-
   const fetchAccountStats = useCallback(
     async (
-      targetCfn: string,
       charIdForTick = selectedCharId,
       forceRefresh = false
     ) => {
@@ -72,7 +46,7 @@ export default function App() {
           params.set('refresh', 'true');
         }
         const qs = params.toString() ? `?${params.toString()}` : '';
-        const response = await fetch(`/api/stats/${encodeURIComponent(targetCfn)}${qs}`);
+        const response = await fetch(`/api/stats/${USER_CFN_ID}${qs}`);
         if (!response.ok) {
           throw new Error(`Ошибка загрузки данных CFN (${response.status})`);
         }
@@ -94,8 +68,8 @@ export default function App() {
   );
 
   useEffect(() => {
-    fetchAccountStats(activeCfnId, 'ed');
-  }, [activeCfnId]);
+    fetchAccountStats('ed');
+  }, []);
 
   // Determine character with highest rank on account (for avatar & top badge)
   const highestRankCharacter = useMemo(() => {
@@ -120,21 +94,7 @@ export default function App() {
     );
   }, [account, selectedCharId]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleaned = cfnInput.trim();
-    if (/^\d{6,12}$/.test(cleaned)) {
-      setActiveCfnId(cleaned);
-    }
-  };
-
-  const handleCopyPrompt = () => {
-    navigator.clipboard.writeText(PROMPT_SPEC_TEXT);
-    setCopiedPrompt(true);
-    setTimeout(() => setCopiedPrompt(false), 2000);
-  };
-
-  // Filter and sort matchups strictly according to user requirements
+  // Filter and sort matchups strictly according to requirements
   const displayedMatchups = useMemo(() => {
     if (!currentCharacter) return [];
     return currentCharacter.matchups
@@ -150,7 +110,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#090D14] text-slate-100 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
-      {/* Top Navigation Bar */}
+      {/* Top Navigation Bar: Clean, distraction-free */}
       <header className="sticky top-0 z-30 flex items-center justify-between px-6 lg:px-10 py-3.5 bg-[#090D14]/90 backdrop-blur-md border-b border-slate-800/80">
         <div className="flex items-center gap-3.5">
           <a
@@ -160,8 +120,11 @@ export default function App() {
             <span>SF6 Analytics</span>
           </a>
           <span className="text-slate-600 text-sm hidden sm:inline">/</span>
-          <span className="text-xs sm:text-sm text-slate-400 font-mono bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800">
-            CFN {activeCfnId}
+          <span className="text-xs sm:text-sm text-slate-300 font-mono bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800">
+            Kapubara
+          </span>
+          <span className="text-xs text-amber-400/90 font-mono hidden md:inline">
+            CFN: {USER_CFN_ID}
           </span>
         </div>
 
@@ -187,15 +150,10 @@ export default function App() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <PWAInstallButton />
-          <button
-            type="button"
-            onClick={() => setIsPromptOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 rounded-lg transition-colors cursor-pointer shadow-sm"
-          >
-            <FileText className="w-3.5 h-3.5 text-slate-400" />
-            <span>ТЗ</span>
-          </button>
+          <span className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 rounded-full text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Capcom CFN Online</span>
+          </span>
         </div>
       </header>
 
@@ -206,7 +164,7 @@ export default function App() {
             <span>{errorMsg}</span>
             <button
               type="button"
-              onClick={() => fetchAccountStats(activeCfnId)}
+              onClick={() => fetchAccountStats()}
               className="text-sm text-rose-200 underline cursor-pointer font-medium"
             >
               Повторить запрос
@@ -265,7 +223,7 @@ export default function App() {
                         {account.fighterName}
                       </span>
                       <span className="text-slate-600">·</span>
-                      <span className="font-mono text-slate-300">CFN: {account.cfnId}</span>
+                      <span className="font-mono text-slate-300">CFN ID: {USER_CFN_ID}</span>
                       <span className="text-slate-600">·</span>
                       <span>{account.platform}</span>
                       <span className="text-slate-600">·</span>
@@ -306,39 +264,17 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* CFN ID Search & Synchronization Block */}
-                <div className="flex flex-col gap-2.5 self-start lg:self-center w-full sm:w-auto">
-                  <form
-                    onSubmit={handleSearchSubmit}
-                    className="flex items-center gap-2"
-                  >
-                    <div className="relative flex-1 sm:flex-initial">
-                      <input
-                        type="text"
-                        value={cfnInput}
-                        onChange={(e) => setCfnInput(e.target.value)}
-                        placeholder="CFN ID..."
-                        className="px-4 py-2 text-sm font-mono bg-[#090D14] border border-slate-700/80 rounded-lg text-slate-100 focus:outline-none focus:border-amber-500 w-full sm:w-48"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-sm font-semibold text-slate-100 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer shrink-0"
-                    >
-                      Изменить
-                    </button>
-                  </form>
-
-                  {/* Prominent Synchronize Button right underneath */}
+                {/* Right side: Dedicated Synchronize Button */}
+                <div className="flex items-center self-start lg:self-center">
                   <button
                     type="button"
-                    onClick={() => fetchAccountStats(activeCfnId, selectedCharId, true)}
+                    onClick={() => fetchAccountStats(selectedCharId, true)}
                     disabled={isSyncing}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 hover:border-amber-500/70 rounded-lg transition-all cursor-pointer shadow-md disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-2.5 px-6 py-3 text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 hover:border-amber-500/70 rounded-xl transition-all cursor-pointer shadow-lg disabled:opacity-50 active:scale-[0.98]"
                     title="Синхронизировать данные профиля с серверами Capcom CFN"
                   >
                     <RefreshCw className={`w-4 h-4 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
-                    <span>{isSyncing ? 'Синхронизация...' : 'Синхронизировать'}</span>
+                    <span>{isSyncing ? 'Синхронизация...' : 'Синхронизировать данные CFN'}</span>
                   </button>
                 </div>
               </div>
@@ -738,75 +674,17 @@ export default function App() {
       <footer className="mt-auto border-t border-slate-800/80 py-6 px-6 lg:px-10 text-xs sm:text-sm text-slate-400 bg-[#070A10]">
         <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
-            SF6 Analytics · Статистика игрока{' '}
+            SF6 Analytics · Персональная статистика игрока{' '}
             <strong className="text-slate-200 font-semibold">
               {account?.fighterName || 'Kapubara'}
             </strong>{' '}
-            (CFN ID: <span className="font-mono text-amber-400">{activeCfnId}</span>)
+            (CFN ID: <span className="font-mono text-amber-400">{USER_CFN_ID}</span>)
           </div>
-          <button
-            type="button"
-            onClick={() => setIsPromptOpen(true)}
-            className="hover:text-amber-400 transition-colors underline cursor-pointer"
-          >
-            Текст ТЗ и спецификации
-          </button>
+          <div className="text-slate-500 font-mono text-xs">
+            Street Fighter 6 · Capcom Fighting Network
+          </div>
         </div>
       </footer>
-
-      {/* Prompt Modal */}
-      {isPromptOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="bg-[#0D121B] border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white font-display">ТЗ / Промпт для генерации</h3>
-              <button
-                type="button"
-                onClick={() => setIsPromptOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <textarea
-              readOnly
-              value={PROMPT_SPEC_TEXT}
-              rows={12}
-              className="w-full text-xs sm:text-sm font-mono bg-[#090D14] border border-slate-800 rounded-lg text-slate-300 p-4 select-all focus:outline-none"
-            />
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={handleCopyPrompt}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg cursor-pointer transition-colors shadow-sm"
-              >
-                {copiedPrompt ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Скопировано!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    <span>Скопировать</span>
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsPromptOpen(false)}
-                className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
