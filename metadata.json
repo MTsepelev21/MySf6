@@ -1,0 +1,6 @@
+{
+  "name": "CFN Buckler Analytics — SF6 Stats Tracker",
+  "description": "Веб-приложение для отслеживания статистики аккаунта Street Fighter 6 по CFN ID 2438096652: ранг, винрейт на персонажах, таблица матчапов, время в режимах и график рейтинга в реальном времени.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

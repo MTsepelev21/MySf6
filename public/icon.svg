@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="104" fill="#090D14"/>
+  <defs>
+    <linearGradient id="crestGrad" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#F59E0B"/>
+      <stop offset="100%" stopColor="#DC2626"/>
+    </linearGradient>
+  </defs>
+  <polygon points="256,48 440,152 440,360 256,464 72,360 72,152" fill="#0D121B" stroke="url(#crestGrad)" stroke-width="24"/>
+  <polygon points="256,96 384,170 384,336 256,410 128,336 128,170" fill="url(#crestGrad)" fill-opacity="0.16" stroke="url(#crestGrad)" stroke-width="10"/>
+  <path d="M152 296L256 152L360 296L312 328L256 248L200 328L152 296Z" fill="url(#crestGrad)"/>
+  <circle cx="256" cy="352" r="24" fill="#FFFFFF"/>
+</svg>

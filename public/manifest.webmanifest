@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "SF6 CFN Analytics — Kapubara",
+  "short_name": "SF6Stats",
+  "description": "Street Fighter 6 CFN Account Statistics, Winrates & Real-time Rank Tracker",
+  "theme_color": "#090D14",
+  "background_color": "#090D14",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
