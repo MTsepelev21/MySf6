@@ -8,7 +8,11 @@ interface RankEmblemProps {
 
 export const RankEmblem: React.FC<RankEmblemProps> = ({ tier, size = 'md' }) => {
   const dimensions =
-    size === 'lg' ? 'w-16 h-16' : size === 'md' ? 'w-11 h-11' : 'w-7 h-7';
+    size === 'lg'
+      ? 'w-16 h-16 sm:w-20 sm:h-20'
+      : size === 'md'
+      ? 'w-10 h-10 sm:w-13 sm:h-13'
+      : 'w-7 h-7 sm:w-9 sm:h-9';
 
   let primaryStop = '#64748B';
   let secondaryStop = '#334155';
@@ -50,7 +54,7 @@ export const RankEmblem: React.FC<RankEmblemProps> = ({ tier, size = 'md' }) => 
         viewBox="0 0 64 64"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-full h-full drop-shadow-sm"
+        className="w-full h-full drop-shadow-md"
       >
         <defs>
           <linearGradient id={gradientId} x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">

@@ -9,8 +9,10 @@ import {
   FileText,
   X,
   Swords,
+  Shield,
+  Trophy,
 } from 'lucide-react';
-import type { CFNAccountData, RankHistoryPoint } from './types/sf6';
+import type { CFNAccountData } from './types/sf6';
 import { RankEmblem } from './components/RankEmblem';
 import { RankChart } from './components/RankChart';
 import { CharacterIcon } from './components/CharacterIcon';
@@ -23,13 +25,13 @@ const PROMPT_SPEC_TEXT = `Создай минималистичное веб-п�
 1. Данные профиля:
 - Игрок: Kapubara (CFN ID: 2438096652, Steam, Russia).
 - Аватар профиля: иконка персонажа с наивысшим рангом на аккаунте (Alex · 15,350 LP, Platinum 2).
-- Персонажи: Ed (3,865 LP, Bronze 3, 55.0% винрейт, 80 матчей), Alex (15,350 LP, Platinum 2, 59.3%), Sagat (7,929 LP, Silver 4, 66.7%), Jamie, Cammy, Akuma и др.
+- Персонажи: на аккаунте отображаются только персонажи, на которых были сыграны игры (Ed 80 матчей, Sagat 45 матчей, Alex 27 матчей, Jamie, Cammy, Terry, Akuma, M. Bison, Luke, Zangief, Dee Jay, A.K.I., Blanka, Guile).
 - Автоматическая синхронизация: данные напрямую подтягиваются из базы CFN без необходимости ручного ввода.
 - Время в игре: статистика игрового времени и распределение по режимам (Fighting Ground, Battle Hub, World Tour).
 
 2. Требования к интерфейсу:
-- Минималистичный, чистый дизайн без лишнего визуального шума и баннеров.
-- График ранга (LP/MR) по времени с интерактивным тултипом и поддержкой обновления в реальном времени.
+- Чистый, выразительный интерфейс с крупными, удобными для чтения на ПК шрифтами и иконками.
+- График ранга (LP/MR) по времени с интерактивным тултипом.
 - Список матчапов против других персонажей строго в формате:
   Иконка персонажа + Имя персонажа + Сыграно игр + Выиграно игр + Процент побед над ним.
 - Журнал недавних боев с отображением Replay ID.`;
@@ -41,12 +43,8 @@ export default function App() {
   const [selectedCharId, setSelectedCharId] = useState<string>('ed');
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Live polling state
-  const [liveIntervalSec, setLiveIntervalSec] = useState<number | null>(null);
-  const [countdownSec, setCountdownSec] = useState<number>(6);
 
   // Matchup list controls
   const [matchupSearch, setMatchupSearch] = useState('');
@@ -59,18 +57,17 @@ export default function App() {
   const fetchAccountStats = useCallback(
     async (
       targetCfn: string,
-      tick = false,
       charIdForTick = selectedCharId,
       forceRefresh = false
     ) => {
       try {
-        if (!account || forceRefresh) setIsLoading(true);
+        if (forceRefresh) {
+          setIsSyncing(true);
+        } else if (!account) {
+          setIsLoading(true);
+        }
         setErrorMsg(null);
         const params = new URLSearchParams();
-        if (tick) {
-          params.set('tick', 'true');
-          params.set('charId', charIdForTick);
-        }
         if (forceRefresh) {
           params.set('refresh', 'true');
         }
@@ -90,33 +87,17 @@ export default function App() {
         );
       } finally {
         setIsLoading(false);
+        setIsSyncing(false);
       }
     },
     [account, selectedCharId]
   );
 
   useEffect(() => {
-    fetchAccountStats(activeCfnId, false, 'ed');
+    fetchAccountStats(activeCfnId, 'ed');
   }, [activeCfnId]);
 
-  useEffect(() => {
-    if (!liveIntervalSec) return;
-    setCountdownSec(liveIntervalSec);
-
-    const timer = window.setInterval(() => {
-      setCountdownSec((prev) => {
-        if (prev <= 1) {
-          fetchAccountStats(activeCfnId, true, selectedCharId);
-          return liveIntervalSec;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [liveIntervalSec, activeCfnId, selectedCharId, fetchAccountStats]);
-
-  // Determine character with highest rank on account (for avatar)
+  // Determine character with highest rank on account (for avatar & top badge)
   const highestRankCharacter = useMemo(() => {
     if (!account || !account.characters?.length) return null;
     return [...account.characters].sort((a, b) => {
@@ -125,37 +106,19 @@ export default function App() {
     })[0];
   }, [account]);
 
+  // Characters with games actually played on this account
+  const activeCharacters = useMemo(() => {
+    if (!account?.characters) return [];
+    return account.characters.filter((c) => c.totalMatches > 0);
+  }, [account]);
+
   const currentCharacter = useMemo(() => {
     if (!account) return null;
     return (
-      account.characters.find((c) => c.charId === selectedCharId) || account.characters[0]
+      account.characters.find((c) => c.charId === selectedCharId) ||
+      account.characters[0]
     );
   }, [account, selectedCharId]);
-
-  const handleTriggerLiveMatch = async (forcedResult?: 'WIN' | 'LOSS') => {
-    if (isSimulating) return;
-    try {
-      setIsSimulating(true);
-      const response = await fetch(`/api/stats/${encodeURIComponent(activeCfnId)}/match`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          charId: selectedCharId,
-          result: forcedResult,
-        }),
-      });
-      if (!response.ok) throw new Error('Ошибка записи матча');
-      const payload: { account: CFNAccountData; latestMatch: RankHistoryPoint } =
-        await response.json();
-      setAccount(payload.account);
-      setSelectedPointId(payload.latestMatch.id);
-      if (liveIntervalSec) setCountdownSec(liveIntervalSec);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Ошибка обновления матча');
-    } finally {
-      setIsSimulating(false);
-    }
-  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,23 +149,28 @@ export default function App() {
   }, [currentCharacter, matchupSearch, matchupSort]);
 
   return (
-    <div className="min-h-screen bg-[#090D14] text-slate-100 flex flex-col font-sans">
-      {/* Minimal Top Navigation */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-3 bg-[#090D14]/90 backdrop-blur-md border-b border-slate-800/60">
-        <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-[#090D14] text-slate-100 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
+      {/* Top Navigation Bar */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-6 lg:px-10 py-3.5 bg-[#090D14]/90 backdrop-blur-md border-b border-slate-800/80">
+        <div className="flex items-center gap-3.5">
           <a
             href="/"
-            className="text-base font-semibold tracking-tight text-white font-display"
+            className="text-lg lg:text-xl font-bold tracking-tight text-white font-display flex items-center gap-2"
           >
-            SF6 Analytics
+            <span>SF6 Analytics</span>
           </a>
-          <span className="text-slate-600 text-xs">/</span>
-          <span className="text-xs text-slate-400 font-mono">CFN {activeCfnId}</span>
+          <span className="text-slate-600 text-sm hidden sm:inline">/</span>
+          <span className="text-xs sm:text-sm text-slate-400 font-mono bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800">
+            CFN {activeCfnId}
+          </span>
         </div>
 
-        <nav className="hidden md:flex items-center gap-6 text-xs text-slate-400 font-medium">
+        <nav className="hidden lg:flex items-center gap-8 text-sm text-slate-400 font-semibold">
           <a href="#overview" className="hover:text-white transition-colors">
             Профиль
+          </a>
+          <a href="#characters-list" className="hover:text-white transition-colors">
+            Персонажи ({activeCharacters.length})
           </a>
           <a href="#rank-trajectory" className="hover:text-white transition-colors">
             График ранга
@@ -218,62 +186,54 @@ export default function App() {
           </a>
         </nav>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <PWAInstallButton />
           <button
             type="button"
-            onClick={() => fetchAccountStats(activeCfnId, false, selectedCharId, true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
-            title="Синхронизировать с Capcom CFN"
-          >
-            <RefreshCw className="w-3 h-3 text-slate-400" />
-            <span>Синхронизировать</span>
-          </button>
-          <button
-            type="button"
             onClick={() => setIsPromptOpen(true)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 rounded-lg transition-colors cursor-pointer shadow-sm"
           >
-            <FileText className="w-3 h-3 text-slate-400" />
-            <span>Промпт</span>
+            <FileText className="w-3.5 h-3.5 text-slate-400" />
+            <span>ТЗ</span>
           </button>
         </div>
       </header>
 
-      {/* Main Viewport */}
-      <main className="flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6 space-y-6">
+      {/* Main Viewport Container */}
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-10 py-8 space-y-8">
         {errorMsg && (
-          <div className="p-3 bg-rose-950/20 border border-rose-800/40 text-rose-300 text-xs flex items-center justify-between">
+          <div className="p-4 bg-rose-950/30 border border-rose-800/60 rounded-xl text-rose-300 text-sm flex items-center justify-between">
             <span>{errorMsg}</span>
             <button
               type="button"
               onClick={() => fetchAccountStats(activeCfnId)}
-              className="text-xs text-rose-200 underline cursor-pointer"
+              className="text-sm text-rose-200 underline cursor-pointer font-medium"
             >
-              Повторить
+              Повторить запрос
             </button>
           </div>
         )}
 
         {isLoading || !account || !currentCharacter ? (
-          <div className="space-y-4 animate-pulse">
-            <div className="h-28 bg-slate-900/40 border border-slate-800/40" />
-            <div className="h-72 bg-slate-900/40 border border-slate-800/40" />
-            <div className="h-64 bg-slate-900/40 border border-slate-800/40" />
+          <div className="space-y-6 animate-pulse">
+            <div className="h-44 bg-slate-900/40 border border-slate-800/60 rounded-xl" />
+            <div className="h-48 bg-slate-900/40 border border-slate-800/60 rounded-xl" />
+            <div className="h-80 bg-slate-900/40 border border-slate-800/60 rounded-xl" />
+            <div className="h-96 bg-slate-900/40 border border-slate-800/60 rounded-xl" />
           </div>
         ) : (
           <>
-            {/* Minimalist Profile & Top Rank Header */}
+            {/* 1. Profile Header Card */}
             <section
               id="overview"
-              className="bg-[#0D121B] border border-slate-800/70 p-5"
+              className="bg-[#0D121B] border border-slate-800/80 rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden"
             >
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 {/* Profile Identity with Highest-Ranked Character Avatar */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-5 sm:gap-6">
                   {/* Avatar: Icon of the character with highest rank on account (Alex) */}
                   <div
-                    className="relative group cursor-pointer"
+                    className="relative group cursor-pointer shrink-0"
                     onClick={() => {
                       if (highestRankCharacter) {
                         setSelectedCharId(highestRankCharacter.charId);
@@ -281,7 +241,7 @@ export default function App() {
                     }}
                     title={`Высший ранг на аккаунте: ${highestRankCharacter?.charName} (${highestRankCharacter?.rankTier})`}
                   >
-                    <div className="w-16 h-16 bg-[#141A26] border border-slate-700/80 flex items-center justify-center relative overflow-hidden">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#141A26] border-2 border-slate-700/80 rounded-2xl flex items-center justify-center relative overflow-hidden shadow-xl group-hover:border-amber-500/80 transition-all">
                       {highestRankCharacter && (
                         <CharacterIcon
                           name={highestRankCharacter.charName}
@@ -290,85 +250,114 @@ export default function App() {
                           className="w-full h-full"
                         />
                       )}
-                      {/* Subtle Rank Crest Badge Overlay */}
+                      {/* Rank Emblem Badge Overlay */}
                       {highestRankCharacter && (
-                        <div className="absolute bottom-1 right-1">
+                        <div className="absolute -bottom-1 -right-1 bg-[#090D14] p-1 rounded-lg border border-slate-700/80 shadow-md">
                           <RankEmblem tier={highestRankCharacter.rankTier} size="sm" />
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <span className="text-white font-medium">{account.fighterName}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-400">
+                      <span className="font-semibold text-slate-200">
+                        {account.fighterName}
+                      </span>
                       <span className="text-slate-600">·</span>
-                      <span className="font-mono text-slate-400">CFN {account.cfnId}</span>
+                      <span className="font-mono text-slate-300">CFN: {account.cfnId}</span>
                       <span className="text-slate-600">·</span>
                       <span>{account.platform}</span>
                       <span className="text-slate-600">·</span>
                       <span>{account.region}</span>
                     </div>
 
-                    <div className="flex items-baseline gap-3 mt-1">
-                      <h1 className="text-2xl font-bold tracking-tight text-white font-display">
+                    <div className="flex flex-wrap items-baseline gap-3">
+                      <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white font-display">
                         {account.fighterName}
                       </h1>
                       {highestRankCharacter && (
-                        <span className="text-xs text-slate-400 font-mono">
-                          Топ персонаж:{' '}
-                          <span className="text-slate-200 font-semibold">
-                            {highestRankCharacter.charName}
-                          </span>{' '}
-                          ({highestRankCharacter.rankTier} ·{' '}
-                          {highestRankCharacter.currentLp.toLocaleString('ru-RU')} LP)
-                        </span>
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs sm:text-sm font-medium text-amber-300">
+                          <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                          <span>
+                            Топ боец: <strong className="text-white">{highestRankCharacter.charName}</strong> ({highestRankCharacter.rankTier} · {highestRankCharacter.currentLp.toLocaleString('ru-RU')} LP)
+                          </span>
+                        </div>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 mt-2 text-xs">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <div className="flex flex-wrap items-center gap-3 pt-1 text-xs sm:text-sm">
+                      <span className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-950/50 text-emerald-300 border border-emerald-800/50 rounded-full font-medium">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                         {account.onlineStatus}
                       </span>
-                      <span className="text-slate-500 font-mono text-[11px]">
-                        Синхр: {new Date(account.capcomSyncedAt || account.lastSyncIso).toLocaleDateString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-slate-400 font-mono text-xs sm:text-sm">
+                        Последняя синхронизация:{' '}
+                        <strong className="text-slate-200">
+                          {new Date(account.capcomSyncedAt || account.lastSyncIso).toLocaleDateString('ru-RU', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </strong>
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Switch CFN search bar */}
-                <form
-                  onSubmit={handleSearchSubmit}
-                  className="flex items-center gap-2 self-start lg:self-center"
-                >
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={cfnInput}
-                      onChange={(e) => setCfnInput(e.target.value)}
-                      placeholder="CFN User ID..."
-                      className="px-3 py-1.5 text-xs font-mono bg-[#090D14] border border-slate-800 text-slate-200 focus:outline-none focus:border-slate-700 w-44"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
+                {/* CFN ID Search & Synchronization Block */}
+                <div className="flex flex-col gap-2.5 self-start lg:self-center w-full sm:w-auto">
+                  <form
+                    onSubmit={handleSearchSubmit}
+                    className="flex items-center gap-2"
                   >
-                    Загрузить
+                    <div className="relative flex-1 sm:flex-initial">
+                      <input
+                        type="text"
+                        value={cfnInput}
+                        onChange={(e) => setCfnInput(e.target.value)}
+                        placeholder="CFN ID..."
+                        className="px-4 py-2 text-sm font-mono bg-[#090D14] border border-slate-700/80 rounded-lg text-slate-100 focus:outline-none focus:border-amber-500 w-full sm:w-48"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-semibold text-slate-100 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer shrink-0"
+                    >
+                      Изменить
+                    </button>
+                  </form>
+
+                  {/* Prominent Synchronize Button right underneath */}
+                  <button
+                    type="button"
+                    onClick={() => fetchAccountStats(activeCfnId, selectedCharId, true)}
+                    disabled={isSyncing}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 hover:border-amber-500/70 rounded-lg transition-all cursor-pointer shadow-md disabled:opacity-50"
+                    title="Синхронизировать данные профиля с серверами Capcom CFN"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Синхронизация...' : 'Синхронизировать'}</span>
                   </button>
-                </form>
+                </div>
               </div>
 
-              {/* Character Selector Tabs */}
-              <div className="mt-5 pt-4 border-t border-slate-800/60">
-                <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">
-                  Персонажи аккаунта (выберите для детальной статистики):
+              {/* 2. Character Selector Grid: ONLY characters with games played */}
+              <div id="characters-list" className="mt-8 pt-6 border-t border-slate-800/80">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-xs sm:text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-amber-400" />
+                    <span>Персонажи аккаунта с сыгранными матчами ({activeCharacters.length})</span>
+                  </div>
+                  <span className="text-xs text-slate-400 hidden sm:inline">
+                    Кликните по персонажу для просмотра подробной аналитики
+                  </span>
                 </div>
 
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {account.characters.map((char) => {
+                {/* Responsive Grid for PC: spacious and prominent cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                  {activeCharacters.map((char) => {
                     const isSelected = char.charId === currentCharacter.charId;
                     const isHighest = char.charId === highestRankCharacter?.charId;
                     return (
@@ -379,116 +368,144 @@ export default function App() {
                           setSelectedCharId(char.charId);
                           setSelectedPointId(null);
                         }}
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs transition-colors cursor-pointer ${
+                        className={`group p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
                           isSelected
-                            ? 'bg-slate-800 text-white font-medium border border-slate-700'
-                            : 'text-slate-400 hover:text-slate-200 bg-[#090D14]/80 border border-slate-800/80'
+                            ? 'bg-[#151D2C] border-amber-500/80 shadow-lg ring-1 ring-amber-500/40'
+                            : 'bg-[#0A0E17]/90 hover:bg-[#121824] border-slate-800/90 hover:border-slate-700'
                         }`}
                       >
-                        <CharacterIcon name={char.charName} size="sm" showBorder={false} />
-                        <span>{char.charName}</span>
-                        <span className="font-mono text-[11px] text-slate-400">
-                          {char.currentLp > 0
-                            ? `${char.currentLp.toLocaleString('ru-RU')} LP`
-                            : `${char.winrate}%`}
-                        </span>
-                        {isHighest && (
-                          <span
-                            className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-                            title="Наивысший ранг"
+                        <div className="flex items-center gap-3">
+                          <CharacterIcon
+                            name={char.charName}
+                            size="md"
+                            showBorder={false}
                           />
-                        )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm sm:text-base font-bold text-white truncate">
+                                {char.charName}
+                              </span>
+                              {isHighest && (
+                                <span
+                                  className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shrink-0"
+                                  title="Высший ранг"
+                                />
+                              )}
+                            </div>
+                            <div className="text-xs font-mono text-slate-400 truncate">
+                              {char.rankTier}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-xs font-mono">
+                          <span className="text-slate-300 font-semibold">
+                            {char.totalMatches} {char.totalMatches === 1 ? 'бой' : 'боев'}
+                          </span>
+                          <span
+                            className={`font-bold ${
+                              char.winrate >= 60
+                                ? 'text-emerald-400'
+                                : char.winrate >= 50
+                                ? 'text-amber-400'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            {char.winrate}% WR
+                          </span>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Selected Character Summary Row */}
-              <div className="mt-4 pt-4 border-t border-slate-800/40 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                <div>
-                  <div className="text-slate-400">
-                    Ранг ({currentCharacter.charName})
+              {/* 3. Selected Character Detailed Stat Row */}
+              <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+                <div className="bg-[#090D14]/80 border border-slate-800/80 rounded-xl p-4 sm:p-5">
+                  <div className="text-xs sm:text-sm font-semibold text-slate-400">
+                    Ранг на бойце ({currentCharacter.charName})
                   </div>
-                  <div className="mt-0.5 text-base font-semibold font-display text-white flex items-center gap-1.5">
-                    <RankEmblem tier={currentCharacter.rankTier} size="sm" />
+                  <div className="mt-2 text-xl sm:text-2xl lg:text-3xl font-bold font-display text-white flex items-center gap-2.5">
+                    <RankEmblem tier={currentCharacter.rankTier} size="md" />
                     <span>{currentCharacter.rankTier}</span>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400 mt-0.5">
+                  <div className="text-xs sm:text-sm font-mono text-amber-400 font-semibold mt-1">
                     {currentCharacter.currentLp > 0
                       ? `${currentCharacter.currentLp.toLocaleString('ru-RU')} LP`
                       : 'Вне лиги / Калибровка'}
                   </div>
                 </div>
 
-                <div>
-                  <div className="text-slate-400">Винрейт в CFN</div>
-                  <div className="mt-0.5 text-base font-semibold font-mono text-emerald-400">
+                <div className="bg-[#090D14]/80 border border-slate-800/80 rounded-xl p-4 sm:p-5">
+                  <div className="text-xs sm:text-sm font-semibold text-slate-400">
+                    Винрейт в CFN
+                  </div>
+                  <div className="mt-2 text-xl sm:text-2xl lg:text-3xl font-bold font-mono text-emerald-400">
                     {currentCharacter.winrate}%
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                    {currentCharacter.wins}W – {currentCharacter.losses}L ({currentCharacter.totalMatches} матчей)
+                  <div className="text-xs sm:text-sm font-mono text-slate-300 mt-1">
+                    {currentCharacter.wins}W – {currentCharacter.losses}L (всего {currentCharacter.totalMatches})
                   </div>
                 </div>
 
-                <div>
-                  <div className="text-slate-400">Серия побед</div>
-                  <div className="mt-0.5 text-base font-semibold font-mono text-amber-400">
+                <div className="bg-[#090D14]/80 border border-slate-800/80 rounded-xl p-4 sm:p-5">
+                  <div className="text-xs sm:text-sm font-semibold text-slate-400">
+                    Серия побед
+                  </div>
+                  <div className="mt-2 text-xl sm:text-2xl lg:text-3xl font-bold font-mono text-amber-400">
                     {currentCharacter.winStreak}W
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                    Лучшая: {currentCharacter.bestWinStreak}W подряд
+                  <div className="text-xs sm:text-sm font-mono text-slate-400 mt-1">
+                    Рекорд аккаунта: <strong className="text-slate-200">{currentCharacter.bestWinStreak}W</strong>
                   </div>
                 </div>
 
-                <div>
-                  <div className="text-slate-400">Управление / Время</div>
-                  <div className="mt-0.5 text-base font-semibold text-slate-200">
+                <div className="bg-[#090D14]/80 border border-slate-800/80 rounded-xl p-4 sm:p-5">
+                  <div className="text-xs sm:text-sm font-semibold text-slate-400">
+                    Тип управления / Опыт
+                  </div>
+                  <div className="mt-2 text-xl sm:text-2xl lg:text-3xl font-bold text-slate-100">
                     {currentCharacter.controlType}
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                    ~{currentCharacter.hoursPlayed} ч на бойце
+                  <div className="text-xs sm:text-sm font-mono text-slate-400 mt-1">
+                    Отыграно: ~{currentCharacter.hoursPlayed} ч
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Rank History Trajectory Chart */}
+            {/* 4. Rank History Trajectory Chart */}
             <RankChart
               character={currentCharacter}
               selectedPointId={selectedPointId}
               onSelectPoint={(pt) => setSelectedPointId(pt.id)}
-              liveIntervalSec={liveIntervalSec}
-              onChangeLiveInterval={setLiveIntervalSec}
-              onTriggerLiveMatch={(res) => handleTriggerLiveMatch(res)}
-              isSimulating={isSimulating}
-              countdownSec={countdownSec}
             />
 
-            {/* Matchup Winrate Section: Exact Minimalist List Form */}
+            {/* 5. Matchups Table */}
             <section
               id="matchups"
-              className="bg-[#0D121B] border border-slate-800/70 p-5"
+              className="bg-[#0D121B] border border-slate-800/80 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/60">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
                 <div>
-                  <h2 className="text-base font-semibold text-white">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white font-display">
                     Винрейт {currentCharacter.charName} против других персонажей
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1">
                     Официальные показатели Capcom CFN для персонажа {currentCharacter.charName}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
                       value={matchupSearch}
                       onChange={(e) => setMatchupSearch(e.target.value)}
                       placeholder="Поиск бойца..."
-                      className="pl-8 pr-3 py-1 text-xs bg-[#090D14] border border-slate-800 text-slate-200 focus:outline-none focus:border-slate-700 w-36"
+                      className="pl-10 pr-4 py-2 text-sm bg-[#090D14] border border-slate-700/80 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500 w-44 sm:w-56"
                     />
                   </div>
 
@@ -503,9 +520,9 @@ export default function App() {
                           : 'matches_desc'
                       )
                     }
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-slate-300 bg-[#090D14] border border-slate-800 hover:border-slate-700 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-200 bg-[#090D14] border border-slate-700/80 rounded-lg hover:border-slate-600 cursor-pointer shadow-sm"
                   >
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                     <span>
                       {matchupSort === 'matches_desc'
                         ? 'По играм'
@@ -518,21 +535,21 @@ export default function App() {
               </div>
 
               {/* Exact format: Иконка + Имя + Сыграно игр + Выиграно игр + Процент побед */}
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="overflow-x-auto rounded-xl border border-slate-800/80 bg-[#0A0E17]/60">
+                <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-800/80 text-[11px] text-slate-400 font-medium">
-                      <th className="py-2.5 px-3 w-12 text-center">Иконка</th>
-                      <th className="py-2.5 px-3">Имя персонажа</th>
-                      <th className="py-2.5 px-3 text-right font-mono">Сыграно игр</th>
-                      <th className="py-2.5 px-3 text-right font-mono">Выиграно игр</th>
-                      <th className="py-2.5 px-3 text-right font-mono">Процент побед</th>
+                    <tr className="border-b border-slate-800 text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-400 bg-[#090D14]">
+                      <th className="py-4 px-5 w-20 text-center">Иконка</th>
+                      <th className="py-4 px-5">Имя персонажа</th>
+                      <th className="py-4 px-5 text-right font-mono">Сыграно игр</th>
+                      <th className="py-4 px-5 text-right font-mono">Выиграно игр</th>
+                      <th className="py-4 px-5 text-right font-mono">Процент побед</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/40">
+                  <tbody className="divide-y divide-slate-800/60">
                     {displayedMatchups.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                        <td colSpan={5} className="py-10 text-center text-slate-400 text-sm">
                           Матчапы не найдены
                         </td>
                       </tr>
@@ -543,35 +560,40 @@ export default function App() {
                         return (
                           <tr
                             key={m.opponentId}
-                            className="hover:bg-slate-800/20 transition-colors"
+                            className="hover:bg-slate-800/30 transition-colors group"
                           >
                             {/* 1. Иконка персонажа */}
-                            <td className="py-2.5 px-3 text-center">
-                              <CharacterIcon name={m.opponentName} size="sm" />
+                            <td className="py-3.5 px-5 text-center">
+                              <CharacterIcon name={m.opponentName} size="md" />
                             </td>
                             {/* 2. Имя персонажа */}
-                            <td className="py-2.5 px-3 font-medium text-slate-200">
-                              {m.opponentName}
+                            <td className="py-3.5 px-5">
+                              <div className="text-sm sm:text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                                {m.opponentName}
+                              </div>
+                              <div className="text-xs text-slate-400">
+                                {m.archetype}
+                              </div>
                             </td>
                             {/* 3. Сыгранные количество игр против него */}
-                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-300">
+                            <td className="py-3.5 px-5 text-right font-mono tabular-nums text-sm sm:text-base font-semibold text-slate-200">
                               {m.matches}
                             </td>
                             {/* 4. Количество выигранных игр из этого количества */}
-                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-300">
-                              <span className="text-emerald-400 font-semibold">{m.wins}</span>
-                              <span className="text-slate-600 mx-1">/</span>
-                              <span>{m.matches}</span>
+                            <td className="py-3.5 px-5 text-right font-mono tabular-nums text-sm sm:text-base">
+                              <span className="text-emerald-400 font-bold">{m.wins}</span>
+                              <span className="text-slate-500 mx-1.5 font-normal">/</span>
+                              <span className="text-slate-300 font-semibold">{m.matches}</span>
                             </td>
                             {/* 5. Процент побед над ним */}
-                            <td className="py-2.5 px-3 text-right font-mono tabular-nums">
+                            <td className="py-3.5 px-5 text-right font-mono tabular-nums">
                               <span
-                                className={`font-semibold ${
+                                className={`inline-block px-3 py-1 text-sm sm:text-base font-bold rounded-lg ${
                                   isHigh
-                                    ? 'text-emerald-400'
+                                    ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
                                     : isLow
-                                    ? 'text-rose-400'
-                                    : 'text-amber-400'
+                                    ? 'bg-rose-950/60 text-rose-400 border border-rose-800/60'
+                                    : 'bg-amber-950/60 text-amber-400 border border-amber-800/60'
                                 }`}
                               >
                                 {m.winrate.toFixed(1)}%
@@ -586,40 +608,47 @@ export default function App() {
               </div>
             </section>
 
-            {/* Playtime & Recent Match Log */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* 6. Playtime & Recent Match Log */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               {/* Playtime modes (6 cols) */}
               <section
                 id="playtime"
-                className="lg:col-span-6 bg-[#0D121B] border border-slate-800/70 p-5"
+                className="lg:col-span-6 bg-[#0D121B] border border-slate-800/80 rounded-2xl p-6 sm:p-8 space-y-5 shadow-xl"
               >
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800/60">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <h2 className="text-base font-semibold text-white">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+                  <div className="flex items-center gap-2.5">
+                    <Clock className="w-5 h-5 text-amber-400" />
+                    <h2 className="text-lg sm:text-xl font-bold text-white font-display">
                       Время в игре и режимах
                     </h2>
                   </div>
-                  <span className="text-xs font-mono text-amber-400 font-semibold">
+                  <span className="text-sm font-mono text-amber-400 font-bold bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/30">
                     {account.playtime.totalHours} ч суммарно
                   </span>
                 </div>
 
-                <div className="mt-3 space-y-2 text-xs">
+                <div className="space-y-3">
                   {account.playtime.modes.map((mode) => (
                     <div
                       key={mode.id}
-                      className="flex items-center justify-between py-1.5 border-b border-slate-800/30 last:border-0"
+                      className="p-3.5 bg-[#0A0E17]/80 border border-slate-800/80 rounded-xl flex items-center justify-between"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-300">{mode.name}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          · {mode.percentage}%
-                        </span>
+                      <div className="space-y-0.5">
+                        <div className="text-sm sm:text-base font-semibold text-slate-200">
+                          {mode.name}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {mode.description}
+                        </div>
                       </div>
-                      <span className="font-mono text-slate-200 font-medium">
-                        {mode.hours} ч
-                      </span>
+                      <div className="text-right font-mono shrink-0 ml-4">
+                        <div className="text-base sm:text-lg font-bold text-white">
+                          {mode.hours} ч
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {mode.percentage}% времени
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -628,21 +657,21 @@ export default function App() {
               {/* Match log (6 cols) */}
               <section
                 id="matches"
-                className="lg:col-span-6 bg-[#0D121B] border border-slate-800/70 p-5"
+                className="lg:col-span-6 bg-[#0D121B] border border-slate-800/80 rounded-2xl p-6 sm:p-8 space-y-5 shadow-xl"
               >
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800/60">
-                  <div className="flex items-center gap-2">
-                    <Swords className="w-3.5 h-3.5 text-slate-400" />
-                    <h2 className="text-base font-semibold text-white">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+                  <div className="flex items-center gap-2.5">
+                    <Swords className="w-5 h-5 text-amber-400" />
+                    <h2 className="text-lg sm:text-xl font-bold text-white font-display">
                       Недавние бои ({currentCharacter.charName})
                     </h2>
                   </div>
-                  <span className="text-xs text-slate-400 font-mono">
-                    Всего {currentCharacter.rankHistory.length}
+                  <span className="text-xs sm:text-sm text-slate-400 font-mono">
+                    Всего в истории: {currentCharacter.rankHistory.length}
                   </span>
                 </div>
 
-                <div className="mt-3 divide-y divide-slate-800/40 text-xs">
+                <div className="space-y-2.5">
                   {currentCharacter.rankHistory
                     .slice(-8)
                     .reverse()
@@ -653,28 +682,30 @@ export default function App() {
                         <div
                           key={pt.id}
                           onClick={() => setSelectedPointId(pt.id)}
-                          className={`py-2 px-2 flex items-center justify-between cursor-pointer transition-colors ${
+                          className={`p-3 sm:p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
                             isSelected
-                              ? 'bg-slate-800/60 border-l border-emerald-400'
-                              : 'hover:bg-slate-800/20'
+                              ? 'bg-[#151D2C] border-amber-500/80 shadow-md ring-1 ring-amber-500/40'
+                              : 'bg-[#0A0E17]/80 hover:bg-[#121824] border-slate-800/80'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5">
-                            <CharacterIcon name={pt.opponentCharName} size="sm" />
+                          <div className="flex items-center gap-3.5">
+                            <CharacterIcon name={pt.opponentCharName} size="md" />
                             <div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-2">
                                 <span
-                                  className={`font-mono font-semibold ${
-                                    isWin ? 'text-emerald-400' : 'text-rose-400'
+                                  className={`font-mono font-bold text-xs sm:text-sm px-2 py-0.5 rounded ${
+                                    isWin
+                                      ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
+                                      : 'bg-rose-950/60 text-rose-400 border border-rose-800/60'
                                   }`}
                                 >
                                   {isWin ? 'WIN' : 'LOSS'}
                                 </span>
-                                <span className="text-slate-300">
+                                <span className="text-sm sm:text-base font-bold text-slate-200">
                                   vs {pt.opponentCharName}
                                 </span>
                               </div>
-                              <div className="text-[11px] text-slate-400 font-mono">
+                              <div className="text-xs text-slate-400 font-mono mt-0.5">
                                 {pt.dateLabel} {pt.timeLabel}{' '}
                                 {pt.replayId ? `· Replay ${pt.replayId}` : ''}
                               </div>
@@ -683,13 +714,13 @@ export default function App() {
 
                           <div className="text-right font-mono">
                             <div
-                              className={`font-semibold ${
+                              className={`text-sm sm:text-base font-bold ${
                                 isWin ? 'text-emerald-400' : 'text-rose-400'
                               }`}
                             >
                               {pt.deltaLp >= 0 ? `+${pt.deltaLp}` : pt.deltaLp} LP
                             </div>
-                            <div className="text-[11px] text-slate-400">
+                            <div className="text-xs sm:text-sm text-slate-400 font-medium">
                               {pt.lp.toLocaleString('ru-RU')} LP
                             </div>
                           </div>
@@ -703,22 +734,22 @@ export default function App() {
         )}
       </main>
 
-      {/* Minimalist Footer */}
-      <footer className="mt-auto border-t border-slate-800/60 py-4 px-6 text-xs text-slate-400">
-        <div className="max-w-[1280px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* Footer */}
+      <footer className="mt-auto border-t border-slate-800/80 py-6 px-6 lg:px-10 text-xs sm:text-sm text-slate-400 bg-[#070A10]">
+        <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
-            SF6 Analytics · Профиль игрока{' '}
-            <strong className="text-slate-300 font-medium">
+            SF6 Analytics · Статистика игрока{' '}
+            <strong className="text-slate-200 font-semibold">
               {account?.fighterName || 'Kapubara'}
             </strong>{' '}
-            (CFN ID: <span className="font-mono">{activeCfnId}</span>)
+            (CFN ID: <span className="font-mono text-amber-400">{activeCfnId}</span>)
           </div>
           <button
             type="button"
             onClick={() => setIsPromptOpen(true)}
-            className="hover:text-slate-300 underline cursor-pointer"
+            className="hover:text-amber-400 transition-colors underline cursor-pointer"
           >
-            Текст ТЗ и промпта
+            Текст ТЗ и спецификации
           </button>
         </div>
       </footer>
@@ -726,41 +757,41 @@ export default function App() {
       {/* Prompt Modal */}
       {isPromptOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
         >
-          <div className="bg-[#0D121B] border border-slate-700 max-w-2xl w-full p-5 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="text-sm font-semibold text-white">ТЗ / Промпт для генерации</h3>
+          <div className="bg-[#0D121B] border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white font-display">ТЗ / Промпт для генерации</h3>
               <button
                 type="button"
                 onClick={() => setIsPromptOpen(false)}
-                className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
             <textarea
               readOnly
               value={PROMPT_SPEC_TEXT}
               rows={12}
-              className="w-full text-xs font-mono bg-[#090D14] border border-slate-800 text-slate-300 p-3 select-all focus:outline-none"
+              className="w-full text-xs sm:text-sm font-mono bg-[#090D14] border border-slate-800 rounded-lg text-slate-300 p-4 select-all focus:outline-none"
             />
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
               <button
                 type="button"
                 onClick={handleCopyPrompt}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg cursor-pointer transition-colors shadow-sm"
               >
                 {copiedPrompt ? (
                   <>
-                    <Check className="w-3.5 h-3.5" />
+                    <Check className="w-4 h-4" />
                     <span>Скопировано!</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5" />
+                    <Copy className="w-4 h-4" />
                     <span>Скопировать</span>
                   </>
                 )}
@@ -768,7 +799,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsPromptOpen(false)}
-                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 cursor-pointer"
+                className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
               >
                 Закрыть
               </button>

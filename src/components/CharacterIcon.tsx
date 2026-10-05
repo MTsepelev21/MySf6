@@ -7,33 +7,33 @@ interface CharacterIconProps {
   showBorder?: boolean;
 }
 
-const CHAR_COLORS: Record<string, { bg: string; text: string; initial: string; badge: string }> = {
-  alex: { bg: 'from-amber-600 to-red-800', text: 'text-amber-200', initial: 'AL', badge: 'bg-amber-500' },
-  sagat: { bg: 'from-orange-600 to-amber-900', text: 'text-orange-200', initial: 'SG', badge: 'bg-orange-500' },
-  ed: { bg: 'from-blue-600 to-indigo-900', text: 'text-blue-200', initial: 'ED', badge: 'bg-blue-500' },
-  jamie: { bg: 'from-yellow-600 to-amber-800', text: 'text-yellow-200', initial: 'JM', badge: 'bg-yellow-500' },
-  cammy: { bg: 'from-teal-600 to-emerald-900', text: 'text-teal-200', initial: 'CM', badge: 'bg-teal-500' },
-  terry: { bg: 'from-red-600 to-rose-900', text: 'text-red-200', initial: 'TR', badge: 'bg-red-500' },
-  akuma: { bg: 'from-rose-700 to-red-950', text: 'text-rose-200', initial: 'AK', badge: 'bg-rose-600' },
-  mbison: { bg: 'from-purple-700 to-indigo-950', text: 'text-purple-200', initial: 'BS', badge: 'bg-purple-600' },
-  zangief: { bg: 'from-red-700 to-stone-900', text: 'text-red-200', initial: 'ZG', badge: 'bg-red-600' },
-  ken: { bg: 'from-amber-500 to-red-800', text: 'text-amber-200', initial: 'KN', badge: 'bg-red-500' },
-  ryu: { bg: 'from-slate-600 to-slate-900', text: 'text-slate-200', initial: 'RY', badge: 'bg-slate-500' },
-  juri: { bg: 'from-pink-600 to-purple-900', text: 'text-pink-200', initial: 'JR', badge: 'bg-pink-500' },
-  luke: { bg: 'from-blue-500 to-indigo-800', text: 'text-blue-200', initial: 'LK', badge: 'bg-blue-500' },
-  chunli: { bg: 'from-cyan-600 to-blue-900', text: 'text-cyan-200', initial: 'CH', badge: 'bg-cyan-500' },
-  guile: { bg: 'from-emerald-600 to-stone-900', text: 'text-emerald-200', initial: 'GL', badge: 'bg-emerald-500' },
-  deejay: { bg: 'from-lime-600 to-emerald-900', text: 'text-lime-200', initial: 'DJ', badge: 'bg-lime-500' },
-  rashid: { bg: 'from-amber-500 to-yellow-800', text: 'text-amber-200', initial: 'RS', badge: 'bg-amber-500' },
-  aki: { bg: 'from-fuchsia-700 to-purple-950', text: 'text-fuchsia-200', initial: 'AK', badge: 'bg-fuchsia-600' },
-  marisa: { bg: 'from-amber-700 to-yellow-950', text: 'text-amber-200', initial: 'MR', badge: 'bg-amber-600' },
-  kimberly: { bg: 'from-violet-600 to-fuchsia-900', text: 'text-violet-200', initial: 'KM', badge: 'bg-violet-500' },
-  manon: { bg: 'from-indigo-600 to-slate-900', text: 'text-indigo-200', initial: 'MN', badge: 'bg-indigo-500' },
-  lily: { bg: 'from-emerald-500 to-teal-800', text: 'text-emerald-200', initial: 'LY', badge: 'bg-emerald-500' },
-  blanka: { bg: 'from-green-600 to-emerald-950', text: 'text-green-200', initial: 'BL', badge: 'bg-green-500' },
-  dhalsim: { bg: 'from-orange-700 to-amber-950', text: 'text-orange-200', initial: 'DH', badge: 'bg-orange-600' },
-  ehonda: { bg: 'from-blue-700 to-slate-900', text: 'text-blue-200', initial: 'EH', badge: 'bg-blue-600' },
-  mai: { bg: 'from-red-600 to-amber-900', text: 'text-red-200', initial: 'MA', badge: 'bg-red-500' },
+const CHAR_COLORS: Record<string, { bg: string; text: string; initial: string; border: string }> = {
+  alex: { bg: 'from-amber-600 via-amber-700 to-red-900', text: 'text-amber-100', initial: 'AL', border: 'border-amber-500/60' },
+  sagat: { bg: 'from-orange-600 via-amber-700 to-amber-950', text: 'text-orange-100', initial: 'SG', border: 'border-orange-500/60' },
+  ed: { bg: 'from-blue-600 via-indigo-700 to-slate-900', text: 'text-blue-100', initial: 'ED', border: 'border-blue-400/60' },
+  jamie: { bg: 'from-yellow-600 via-amber-600 to-amber-950', text: 'text-yellow-100', initial: 'JM', border: 'border-yellow-400/60' },
+  cammy: { bg: 'from-teal-600 via-emerald-700 to-teal-950', text: 'text-teal-100', initial: 'CM', border: 'border-teal-400/60' },
+  terry: { bg: 'from-red-600 via-rose-700 to-red-950', text: 'text-red-100', initial: 'TR', border: 'border-red-400/60' },
+  akuma: { bg: 'from-rose-700 via-red-800 to-black', text: 'text-rose-100', initial: 'AK', border: 'border-rose-500/60' },
+  mbison: { bg: 'from-purple-700 via-indigo-800 to-black', text: 'text-purple-100', initial: 'BS', border: 'border-purple-400/60' },
+  zangief: { bg: 'from-red-700 via-amber-900 to-stone-950', text: 'text-red-100', initial: 'ZG', border: 'border-red-500/60' },
+  ken: { bg: 'from-amber-500 via-orange-600 to-red-900', text: 'text-amber-100', initial: 'KN', border: 'border-amber-400/60' },
+  ryu: { bg: 'from-slate-600 via-slate-700 to-slate-950', text: 'text-slate-100', initial: 'RY', border: 'border-slate-400/60' },
+  juri: { bg: 'from-pink-600 via-purple-700 to-purple-950', text: 'text-pink-100', initial: 'JR', border: 'border-pink-400/60' },
+  luke: { bg: 'from-blue-500 via-indigo-600 to-indigo-950', text: 'text-blue-100', initial: 'LK', border: 'border-blue-400/60' },
+  chunli: { bg: 'from-cyan-600 via-blue-700 to-blue-950', text: 'text-cyan-100', initial: 'CH', border: 'border-cyan-400/60' },
+  guile: { bg: 'from-emerald-600 via-teal-700 to-stone-950', text: 'text-emerald-100', initial: 'GL', border: 'border-emerald-400/60' },
+  deejay: { bg: 'from-lime-600 via-emerald-600 to-teal-950', text: 'text-lime-100', initial: 'DJ', border: 'border-lime-400/60' },
+  rashid: { bg: 'from-amber-500 via-yellow-600 to-stone-900', text: 'text-amber-100', initial: 'RS', border: 'border-amber-400/60' },
+  aki: { bg: 'from-fuchsia-700 via-purple-800 to-black', text: 'text-fuchsia-100', initial: 'AK', border: 'border-fuchsia-400/60' },
+  marisa: { bg: 'from-amber-700 via-yellow-800 to-stone-950', text: 'text-amber-100', initial: 'MR', border: 'border-amber-500/60' },
+  kimberly: { bg: 'from-violet-600 via-fuchsia-700 to-purple-950', text: 'text-violet-100', initial: 'KM', border: 'border-violet-400/60' },
+  manon: { bg: 'from-indigo-600 via-slate-700 to-slate-950', text: 'text-indigo-100', initial: 'MN', border: 'border-indigo-400/60' },
+  lily: { bg: 'from-emerald-500 via-teal-600 to-teal-950', text: 'text-emerald-100', initial: 'LY', border: 'border-emerald-400/60' },
+  blanka: { bg: 'from-green-600 via-emerald-700 to-black', text: 'text-green-100', initial: 'BL', border: 'border-green-400/60' },
+  dhalsim: { bg: 'from-orange-700 via-amber-800 to-stone-950', text: 'text-orange-100', initial: 'DH', border: 'border-orange-500/60' },
+  ehonda: { bg: 'from-blue-700 via-sky-800 to-slate-950', text: 'text-blue-100', initial: 'EH', border: 'border-blue-500/60' },
+  mai: { bg: 'from-red-600 via-amber-700 to-red-950', text: 'text-red-100', initial: 'MA', border: 'border-red-400/60' },
 };
 
 export const CharacterIcon: React.FC<CharacterIconProps> = ({
@@ -45,28 +45,29 @@ export const CharacterIcon: React.FC<CharacterIconProps> = ({
   const normKey = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const config =
     CHAR_COLORS[normKey] || {
-      bg: 'from-slate-700 to-slate-900',
-      text: 'text-slate-200',
+      bg: 'from-slate-700 via-slate-800 to-slate-950',
+      text: 'text-slate-100',
       initial: (name || 'SF').slice(0, 2).toUpperCase(),
-      badge: 'bg-slate-500',
+      border: 'border-slate-500/50',
     };
 
+  // Increased dimensions for PC/Desktop comfort and readability
   const dimensions =
     size === 'xl'
-      ? 'w-16 h-16 text-lg'
+      ? 'w-20 h-20 sm:w-24 sm:h-24 text-2xl sm:text-3xl rounded-xl shadow-lg'
       : size === 'lg'
-      ? 'w-12 h-12 text-sm'
+      ? 'w-14 h-14 sm:w-16 sm:h-16 text-lg sm:text-xl rounded-lg shadow-md'
       : size === 'md'
-      ? 'w-8 h-8 text-xs'
-      : 'w-6 h-6 text-[10px]';
+      ? 'w-10 h-10 sm:w-12 sm:h-12 text-sm sm:text-base rounded-md shadow'
+      : 'w-8 h-8 sm:w-9 sm:h-9 text-xs sm:text-sm rounded-md shadow-sm';
 
   return (
     <div
-      className={`relative inline-flex items-center justify-center font-display font-bold select-none shrink-0 bg-gradient-to-br ${config.bg} ${config.text} ${dimensions} ${
-        showBorder ? 'border border-slate-700/60 shadow-inner' : ''
+      className={`relative inline-flex items-center justify-center font-display font-extrabold select-none shrink-0 bg-gradient-to-br ${config.bg} ${config.text} ${dimensions} ${
+        showBorder ? `border ${config.border}` : ''
       } ${className}`}
     >
-      <span className="tracking-tighter drop-shadow">{config.initial}</span>
+      <span className="tracking-tight drop-shadow-md">{config.initial}</span>
     </div>
   );
 };

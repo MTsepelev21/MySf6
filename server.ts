@@ -289,9 +289,10 @@ function transformSFStatsToAccountData(raw: any, cfnId: string): CFNAccountData 
 
   const rawMatches: any[] = raw?.matches || [];
 
-  // Order characters: Main character (Ed) first, then Alex, Sagat, then by games played
+  // Only characters with games played on the account
   const mainCharName = fighter.mainCharacter || banner.mainCharacter || 'Ed';
-  const sortedCharWinRates = [...charWinRates].sort((a, b) => {
+  const activeCharWinRates = charWinRates.filter((c) => (c.games || 0) > 0);
+  const sortedCharWinRates = [...activeCharWinRates].sort((a, b) => {
     if (a.character === mainCharName) return -1;
     if (b.character === mainCharName) return 1;
     return b.games - a.games;

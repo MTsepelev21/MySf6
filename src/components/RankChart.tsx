@@ -1,27 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { Activity, Play, Pause, Plus, TrendingUp, TrendingDown } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown } from 'lucide-react';
 import type { CharacterStats, RankHistoryPoint } from '../types/sf6';
 
 interface RankChartProps {
   character: CharacterStats;
   selectedPointId: string | null;
   onSelectPoint: (point: RankHistoryPoint) => void;
-  liveIntervalSec: number | null;
-  onChangeLiveInterval: (interval: number | null) => void;
-  onTriggerLiveMatch: (forcedResult?: 'WIN' | 'LOSS') => void;
-  isSimulating: boolean;
-  countdownSec: number;
 }
 
 export const RankChart: React.FC<RankChartProps> = ({
   character,
   selectedPointId,
   onSelectPoint,
-  liveIntervalSec,
-  onChangeLiveInterval,
-  onTriggerLiveMatch,
-  isSimulating,
-  countdownSec,
 }) => {
   const [hoveredPoint, setHoveredPoint] = useState<RankHistoryPoint | null>(null);
 
@@ -46,10 +36,10 @@ export const RankChart: React.FC<RankChartProps> = ({
 
   const range = Math.max(1, maxVal - minVal);
 
-  const chartWidth = 900;
-  const chartHeight = 260;
-  const padX = 40;
-  const padY = 30;
+  const chartWidth = 920;
+  const chartHeight = 280;
+  const padX = 50;
+  const padY = 32;
   const plotW = chartWidth - padX * 2;
   const plotH = chartHeight - padY * 2;
 
@@ -91,63 +81,33 @@ export const RankChart: React.FC<RankChartProps> = ({
   const activePoint = hoveredPoint || points.find((p) => p.id === selectedPointId) || points[points.length - 1];
 
   return (
-    <section id="rank-trajectory" className="bg-[#0D121B] border border-slate-800/70 p-5 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/60">
+    <section id="rank-trajectory" className="bg-[#0D121B] border border-slate-800/80 rounded-xl p-5 sm:p-7 space-y-5 shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/70">
         <div>
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-amber-400" />
-            <h2 className="text-base font-semibold text-white">
-              График динамики ранга ({character.charName})
+          <div className="flex items-center gap-2.5">
+            <Activity className="w-5 h-5 text-amber-400" />
+            <h2 className="text-lg sm:text-xl font-bold text-white font-display">
+              Динамика ранга и LP ({character.charName})
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Соотношение ранговых очков {isMaster ? 'Master Rating (MR)' : 'League Points (LP)'} и времени
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            История изменения {isMaster ? 'Master Rating (MR)' : 'League Points (LP)'} в официальных рейтинговых боях
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Polling Interval Controls */}
-          <div className="flex items-center bg-[#090D14] border border-slate-800 p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => onChangeLiveInterval(liveIntervalSec ? null : 6)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 transition-colors cursor-pointer ${
-                liveIntervalSec
-                  ? 'bg-amber-500/20 text-amber-300 font-medium'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Переключить автообновление в реальном времени"
-            >
-              {liveIntervalSec ? (
-                <>
-                  <Pause className="w-3 h-3 text-amber-400" />
-                  <span>Live ({countdownSec}s)</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 text-slate-400" />
-                  <span>Пауза</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Quick Simulation trigger */}
-          <button
-            type="button"
-            onClick={() => onTriggerLiveMatch('WIN')}
-            disabled={isSimulating}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 transition-colors cursor-pointer disabled:opacity-50"
-            title="Записать победный бой в CFN лог"
-          >
-            <Plus className="w-3 h-3 text-emerald-400" />
-            <span>+Бой (Win)</span>
-          </button>
+        <div className="flex items-center gap-3 text-xs sm:text-sm font-mono bg-[#090D14] border border-slate-800/80 px-3.5 py-1.5 rounded-lg">
+          <span className="text-slate-400">
+            Матчей в выборке: <strong className="text-slate-200">{points.length}</strong>
+          </span>
+          <span className="text-slate-600">·</span>
+          <span className="text-amber-400 font-bold">
+            Текущий: {character.currentLp.toLocaleString('ru-RU')} LP
+          </span>
         </div>
       </div>
 
       {/* SVG Chart Frame */}
-      <div className="relative w-full overflow-hidden bg-[#080C14] border border-slate-800/90 p-2">
+      <div className="relative w-full overflow-hidden bg-[#080C14] border border-slate-800/90 rounded-lg p-3">
         <svg
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
           className="w-full h-auto select-none"
@@ -172,16 +132,16 @@ export const RankChart: React.FC<RankChartProps> = ({
                   x2={chartWidth - padX}
                   y2={y}
                   stroke="#1E293B"
-                  strokeDasharray="3 3"
-                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                  strokeWidth="1.2"
                 />
                 <text
-                  x={padX - 8}
+                  x={padX - 10}
                   y={y + 4}
-                  fill="#64748B"
-                  fontSize="10"
+                  fill="#94A3B8"
+                  fontSize="12"
                   textAnchor="end"
-                  className="font-mono"
+                  className="font-mono font-medium"
                 >
                   {val.toLocaleString('ru-RU')}
                 </text>
@@ -198,7 +158,7 @@ export const RankChart: React.FC<RankChartProps> = ({
               d={pathD}
               fill="none"
               stroke="#F59E0B"
-              strokeWidth="2.5"
+              strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -218,10 +178,10 @@ export const RankChart: React.FC<RankChartProps> = ({
                 <circle
                   cx={c.x}
                   cy={c.y}
-                  r={isSel ? 6 : 3}
+                  r={isSel ? 7 : 4.5}
                   fill={isWin ? '#10B981' : '#F43F5E'}
                   stroke="#080C14"
-                  strokeWidth="2"
+                  strokeWidth="2.5"
                 />
               </g>
             );
@@ -230,43 +190,43 @@ export const RankChart: React.FC<RankChartProps> = ({
 
         {/* Floating Tooltip */}
         {activePoint && (
-          <div className="mt-2 p-2.5 bg-[#0D121B] border border-slate-700/80 text-xs flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+          <div className="mt-3 p-3.5 sm:p-4 bg-[#0D121B] border border-slate-700/80 rounded-lg text-xs sm:text-sm flex flex-wrap items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-2.5">
               <span
-                className={`font-semibold font-mono ${
+                className={`font-bold font-mono text-sm sm:text-base ${
                   activePoint.result === 'WIN' ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >
                 {activePoint.result === 'WIN' ? (
-                  <TrendingUp className="inline w-3.5 h-3.5 mr-1" />
+                  <TrendingUp className="inline w-4 h-4 mr-1" />
                 ) : (
-                  <TrendingDown className="inline w-3.5 h-3.5 mr-1" />
+                  <TrendingDown className="inline w-4 h-4 mr-1" />
                 )}
                 {activePoint.result}
               </span>
-              <span className="text-slate-300">vs {activePoint.opponentCharName}</span>
+              <span className="text-slate-200 font-medium text-sm sm:text-base">vs {activePoint.opponentCharName}</span>
               <span className="text-slate-500">·</span>
-              <span className="text-slate-400 font-mono">
+              <span className="text-slate-400 font-mono text-xs sm:text-sm">
                 {activePoint.dateLabel} {activePoint.timeLabel}
               </span>
               {activePoint.replayId && (
-                <span className="text-[11px] font-mono text-slate-500">
+                <span className="text-xs font-mono text-slate-500 bg-slate-800/80 px-2 py-0.5 rounded">
                   Replay: {activePoint.replayId}
                 </span>
               )}
             </div>
 
-            <div className="font-mono flex items-center gap-3">
-              <span className="text-slate-400">
+            <div className="font-mono flex items-center gap-4">
+              <span className="text-slate-300 text-xs sm:text-sm">
                 Ранг:{' '}
-                <strong className="text-white">{activePoint.rankTier}</strong>
+                <strong className="text-white font-semibold">{activePoint.rankTier}</strong>
               </span>
-              <span className="text-amber-400 font-semibold">
+              <span className="text-amber-400 font-bold text-sm sm:text-base">
                 {activePoint.lp.toLocaleString('ru-RU')} LP
               </span>
               <span
-                className={`text-[11px] font-semibold ${
-                  activePoint.deltaLp >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                className={`text-xs sm:text-sm font-bold px-2 py-0.5 rounded ${
+                  activePoint.deltaLp >= 0 ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/50' : 'bg-rose-950/60 text-rose-400 border border-rose-800/50'
                 }`}
               >
                 {activePoint.deltaLp >= 0 ? `+${activePoint.deltaLp}` : activePoint.deltaLp} LP
