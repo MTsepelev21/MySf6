@@ -413,23 +413,32 @@ function transformSFStatsToAccountData(raw: any, cfnId: string): CFNAccountData 
         }
       }
 
-      let prevLp = runningLp;
       for (let i = 0; i < deltas.length; i++) {
         const { m, isWin, dLp } = deltas[i];
-        const explicitLp = m.home?.lp && m.home.lp > 0 ? Number(m.home.lp) : null;
+        const startLp = m.home?.lp && m.home.lp > 0 ? Number(m.home.lp) : null;
+        const nextMatch = i + 1 < deltas.length ? deltas[i + 1].m : null;
+        const nextStartLp =
+          nextMatch?.home?.lp && nextMatch.home.lp > 0 ? Number(nextMatch.home.lp) : null;
+
         let ptLp: number;
         let actualDeltaLp: number;
 
-        if (explicitLp !== null) {
-          ptLp = explicitLp;
-          actualDeltaLp = i === 0 ? (isWin ? 50 : -40) : ptLp - prevLp;
-          if (actualDeltaLp === 0) actualDeltaLp = isWin ? 50 : -40;
+        if (startLp !== null) {
+          if (nextStartLp !== null && nextStartLp !== startLp) {
+            ptLp = nextStartLp;
+            actualDeltaLp = nextStartLp - startLp;
+          } else if (i === deltas.length - 1 && currentLp > 0 && currentLp !== startLp) {
+            ptLp = currentLp;
+            actualDeltaLp = currentLp - startLp;
+          } else {
+            actualDeltaLp = isWin ? 50 : -40;
+            ptLp = Math.max(0, startLp + actualDeltaLp);
+          }
         } else {
           runningLp += dLp;
           ptLp = runningLp;
           actualDeltaLp = dLp;
         }
-        prevLp = ptLp;
 
         const dt = new Date(m.playedAt || Date.now());
         const homeR = Array.isArray(m.homeRounds)
@@ -570,36 +579,122 @@ function transformSFStatsToAccountData(raw: any, cfnId: string): CFNAccountData 
 
 const accountCache = new Map<string, CFNAccountData>();
 
+function getSFStatsHeaders(cfnId: string): Record<string, string> {
+  return {
+    Origin: 'https://sfstats.app',
+    Referer: `https://sfstats.app/en/players/${encodeURIComponent(cfnId)}`,
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Dest': 'empty',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    Accept: 'application/json',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  };
+}
+
+async function waitForSFStatsSyncCompletion(cfnId: string, maxAttempts = 12): Promise<void> {
+  const headers = getSFStatsHeaders(cfnId);
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    try {
+      const statusRes = await fetch(
+        `https://sfstats.app/api/fighters/${encodeURIComponent(cfnId)}/sync`,
+        { headers }
+      );
+      if (!statusRes.ok) break;
+      const statusData = await statusRes.json();
+      const state = statusData?.demand?.state;
+      if (state !== 'queued' && state !== 'running') {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+}
+
 async function fetchLiveFromSFStats(
   cfnId: string,
   triggerRemoteSync = false
 ): Promise<CFNAccountData | null> {
+  const headers = getSFStatsHeaders(cfnId);
   try {
+    let isCurrentlyRunning = false;
+
     if (triggerRemoteSync) {
-      await fetch(
-        `https://sfstats.app/api/fighters/${encodeURIComponent(cfnId)}/sync?intent=bootstrap`,
-        {
-          method: 'POST',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
+      try {
+        const checkRes = await fetch(
+          `https://sfstats.app/api/fighters/${encodeURIComponent(cfnId)}/sync`,
+          { headers }
+        );
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          const demand = checkData?.demand;
+          if (demand?.state === 'queued' || demand?.state === 'running') {
+            isCurrentlyRunning = true;
+          }
         }
-      ).catch(() => {});
+      } catch {
+        // Ignore status check error
+      }
+
+      if (!isCurrentlyRunning) {
+        try {
+          const syncRes = await fetch(
+            `https://sfstats.app/api/fighters/${encodeURIComponent(cfnId)}/sync`,
+            {
+              method: 'POST',
+              headers,
+            }
+          );
+          const syncData = await syncRes.json().catch(() => null);
+          const newState = syncData?.demand?.state;
+          if (newState === 'queued' || newState === 'running' || syncData?.queued) {
+            isCurrentlyRunning = true;
+          } else if (syncRes.status === 403 || syncData?.manualQuota?.action === 'rejected') {
+            const searchSync = await fetch(
+              `https://sfstats.app/api/search?q=${encodeURIComponent(cfnId)}`,
+              {
+                method: 'POST',
+                headers,
+              }
+            ).catch(() => null);
+            if (searchSync && searchSync.ok) {
+              const searchData = await searchSync.json().catch(() => null);
+              if (
+                searchData?.demand?.state === 'queued' ||
+                searchData?.demand?.state === 'running'
+              ) {
+                isCurrentlyRunning = true;
+              }
+            }
+          }
+        } catch (syncErr) {
+          console.error('Error triggering remote sync:', syncErr);
+        }
+      }
+
+      if (isCurrentlyRunning) {
+        await waitForSFStatsSyncCompletion(cfnId, 12);
+      }
     }
 
     const res = await fetch(
-      `https://sfstats.app/api/fighters/${encodeURIComponent(cfnId)}/stats`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Accept: 'application/json',
-        },
-      }
+      `https://sfstats.app/api/fighters/${encodeURIComponent(cfnId)}/stats?_t=${Date.now()}`,
+      { headers }
     );
     if (!res.ok) return null;
     const raw = await res.json();
     if (!raw || !raw.fighter) return null;
-    return transformSFStatsToAccountData(raw, cfnId);
+    const transformed = transformSFStatsToAccountData(raw, cfnId);
+    const nowIso = new Date().toISOString();
+    transformed.lastSyncIso = nowIso;
+    if (triggerRemoteSync) {
+      transformed.capcomSyncedAt = nowIso;
+    }
+    return transformed;
   } catch (err) {
     console.error('Error fetching from sfstats.app:', err);
     return null;

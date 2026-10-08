@@ -23,6 +23,7 @@ export default function App() {
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncSuccess, setSyncSuccess] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Matchup list controls
@@ -37,6 +38,7 @@ export default function App() {
       try {
         if (forceRefresh) {
           setIsSyncing(true);
+          setSyncSuccess(false);
         } else if (!account) {
           setIsLoading(true);
         }
@@ -44,9 +46,12 @@ export default function App() {
         const params = new URLSearchParams();
         if (forceRefresh) {
           params.set('refresh', 'true');
+          params.set('_t', String(Date.now()));
         }
         const qs = params.toString() ? `?${params.toString()}` : '';
-        const response = await fetch(`/api/stats/${USER_CFN_ID}${qs}`);
+        const response = await fetch(`/api/stats/${USER_CFN_ID}${qs}`, {
+          cache: 'no-store',
+        });
         if (!response.ok) {
           throw new Error(`Ошибка загрузки данных CFN (${response.status})`);
         }
@@ -54,6 +59,10 @@ export default function App() {
         setAccount(data);
         if (!data.characters.some((c) => c.charId === charIdForTick)) {
           setSelectedCharId(data.mainCharacterId);
+        }
+        if (forceRefresh) {
+          setSyncSuccess(true);
+          window.setTimeout(() => setSyncSuccess(false), 4000);
         }
       } catch (err) {
         setErrorMsg(
@@ -252,11 +261,12 @@ export default function App() {
                       <span className="text-slate-400 font-mono text-xs sm:text-sm">
                         Последняя синхронизация:{' '}
                         <strong className="text-slate-200">
-                          {new Date(account.capcomSyncedAt || account.lastSyncIso).toLocaleDateString('ru-RU', {
+                          {new Date(account.lastSyncIso || account.capcomSyncedAt || Date.now()).toLocaleString('ru-RU', {
                             day: 'numeric',
                             month: 'short',
                             hour: '2-digit',
                             minute: '2-digit',
+                            second: '2-digit',
                           })}
                         </strong>
                       </span>
@@ -265,16 +275,26 @@ export default function App() {
                 </div>
 
                 {/* Right side: Dedicated Synchronize Button */}
-                <div className="flex items-center self-start lg:self-center">
+                <div className="flex flex-col items-start lg:items-end gap-1.5 self-start lg:self-center">
                   <button
                     type="button"
                     onClick={() => fetchAccountStats(selectedCharId, true)}
                     disabled={isSyncing}
-                    className="inline-flex items-center justify-center gap-2.5 px-6 py-3 text-sm font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 hover:border-amber-500/70 rounded-xl transition-all cursor-pointer shadow-lg disabled:opacity-50 active:scale-[0.98]"
-                    title="Синхронизировать данные профиля с серверами Capcom CFN"
+                    className={`inline-flex items-center justify-center gap-2.5 px-6 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer shadow-lg disabled:opacity-60 active:scale-[0.98] ${
+                      syncSuccess
+                        ? 'text-emerald-300 bg-emerald-500/20 border border-emerald-500/50'
+                        : 'text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 hover:border-amber-500/70'
+                    }`}
+                    title="Принудительно обновить данные напрямую с серверов Capcom CFN"
                   >
-                    <RefreshCw className={`w-4 h-4 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
-                    <span>{isSyncing ? 'Синхронизация...' : 'Синхронизировать данные CFN'}</span>
+                    <RefreshCw className={`w-4 h-4 ${syncSuccess ? 'text-emerald-400' : 'text-amber-400'} ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isSyncing
+                        ? 'Запрос новых игр из Capcom CFN...'
+                        : syncSuccess
+                        ? 'Данные CFN обновлены!'
+                        : 'Синхронизировать данные CFN'}
+                    </span>
                   </button>
                 </div>
               </div>
